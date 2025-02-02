@@ -66,6 +66,36 @@ function Get-BackupProductKeyFromRegistry {
     }
 }
 
+# Function to install software using winget
+function Install-WithWinget {
+    param (
+        [string]$package
+    )
+    Write-Host "`nSearching and Installing $package via winget..."
+    Run-AdminCommand -command "winget install $package"
+    Start-Sleep -Seconds 3
+}
+
+# Function to install software using Invoke-RestMethod (IRM) for downloading and installing from URL
+function Install-WithIRM {
+    param (
+        [string]$url
+    )
+    Write-Host "`nDownloading and Installing from URL..."
+    $file = "$env:TEMP\software_installer.exe"
+    Invoke-RestMethod -Uri $url -OutFile $file
+    Start-Process -FilePath $file
+    Start-Sleep -Seconds 3
+}
+
+# Function to install WizTree using winget
+function Install-WizTree {
+    Write-Host "`nInstalling WizTree using winget..."
+    Run-AdminCommand -command "winget install WizTree"
+    Start-Sleep -Seconds 3
+}
+
+# Function to show menu
 function Show-Menu {
     param (
         [int]$SelectedIndex
@@ -91,6 +121,9 @@ function Show-Menu {
         "Reactivate with Saved Key",
         "Get Product Key",
         "Run System File Checker (sfc /scannow)",
+        "Install Software via winget",
+        "Install Software via URL (IRM)",
+        "Install WizTree",
         "Exit"
     )
 
@@ -108,6 +141,7 @@ function Show-Menu {
     }
 }
 
+# Function to run CLI
 function Run-CLI {
     $selectedIndex = 0
     $menuItems = @(
@@ -122,6 +156,9 @@ function Run-CLI {
         "Reactivate with Saved Key",
         "Get Product Key",
         "Run System File Checker (sfc /scannow)",
+        "Install Software via winget",
+        "Install Software via URL (IRM)",
+        "Install WizTree",
         "Exit"
     )
 
@@ -200,9 +237,20 @@ function Run-CLI {
                         Write-Host "`nRunning System File Checker..."
                         Run-SystemFileChecker
                     }
-                    11 { 
-                        Write-Host "`nExiting script..." 
-                        return # This will exit the script
+                    11 {
+                        $package = Read-Host "Enter software name to install via winget"
+                        Install-WithWinget -package $package
+                    }
+                    12 {
+                        $url = Read-Host "Enter URL to download software via IRM"
+                        Install-WithIRM -url $url
+                    }
+                    13 {
+                        Install-WizTree
+                    }
+                    14 {
+                        Write-Host "`nExiting..."
+                        exit
                     }
                 }
             }
@@ -210,4 +258,5 @@ function Run-CLI {
     } while ($true)
 }
 
+# Start the command-line interface
 Run-CLI
