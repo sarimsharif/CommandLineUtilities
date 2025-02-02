@@ -1,98 +1,8 @@
-# Function to check if the script is running as administrator
-function Test-IsAdministrator {
-    $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object System.Security.Principal.WindowsPrincipal($currentIdentity)
-    return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-# Function to run commands with elevated privileges (if needed) in cmd
-function Run-AdminCommand {
-    param (
-        [string]$command
-    )
-
-    if (-not (Test-IsAdministrator)) {
-        # If not running as admin, prompt for elevation
-        $arguments = "/c $command"
-        Start-Process cmd -ArgumentList "/c start /min cmd.exe /c $command" -Verb RunAs
-        return
-    }
-
-    # Start the elevated command in an invisible window
-    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c $command" `
-                              -WindowStyle Hidden -PassThru `
-                              -RedirectStandardOutput "output.txt" `
-                              -RedirectStandardError "error.txt"
-
-    # Wait for process to complete
-    $process.WaitForExit()
-
-    # Display output and errors in the main window
-    if (Test-Path "output.txt") {
-        $output = Get-Content "output.txt" -Raw
-        Write-Host "`n$output"
-    }
-
-    if (Test-Path "error.txt") {
-        $error = Get-Content "error.txt" -Raw
-        Write-Host "`n$error" -ForegroundColor Red
-    }
-
-    # Clean up the output files
-    Remove-Item "output.txt", "error.txt" -Force
-}
-
-# Function to run System File Checker with elevation
-function Run-SystemFileChecker {
-    Write-Host "`nRunning System File Checker (sfc /scannow)..."
-    Run-AdminCommand -command "sfc /scannow"
+# Function to install Windows Subsystem for Linux (WSL)
+function Install-WSL {
+    Write-Host "`nInstalling Windows Subsystem for Linux (WSL)..."
+    Run-AdminCommand -command "wsl --install"
     Start-Sleep -Seconds 5
-}
-
-# Function to get the saved product key from registry (BackupProductKeyDefault)
-function Get-BackupProductKeyFromRegistry {
-    try {
-        # Correct registry path for BackupProductKeyDefault
-        $Path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform"
-        $key = (Get-ItemProperty -Path $Path).BackupProductKeyDefault
-        if ($key) {
-            return $key
-        }
-        else {
-            Write-Host "`nNo backup product key found in registry." -ForegroundColor Red
-        }
-    } catch {
-        Write-Host "`nError retrieving backup product key." -ForegroundColor Red
-    }
-}
-
-# Function to install software using winget
-function Install-WithWinget {
-    param (
-        [string]$package
-    )
-    Write-Host "`nSearching and Installing $package via winget..."
-    Run-AdminCommand -command "winget install $package"
-    Start-Sleep -Seconds 3
-}
-
-# Function to install software using Invoke-RestMethod (IRM) for downloading and installing from URL
-function Install-WithIRM {
-    param (
-        [string]$url
-    )
-    Write-Host "`nDownloading and Installing from URL..."
-    $file = "$env:TEMP\software_installer.exe"
-    Invoke-RestMethod -Uri $url -OutFile $file
-    Start-Process -FilePath $file
-    Start-Sleep -Seconds 3
-}
-
-# Function to install WizTree using winget
-function Install-WizTree {
-    Write-Host "`nInstalling WizTree using winget..."
-    Run-AdminCommand -command "winget install WizTree"
-    Start-Sleep -Seconds 3
 }
 
 # Function to show menu
@@ -124,6 +34,7 @@ function Show-Menu {
         "Install Software via winget",
         "Install Software via URL (IRM)",
         "Install WizTree",
+        "Install WSL (Windows Subsystem for Linux)",
         "Exit"
     )
 
@@ -159,6 +70,7 @@ function Run-CLI {
         "Install Software via winget",
         "Install Software via URL (IRM)",
         "Install WizTree",
+        "Install WSL (Windows Subsystem for Linux)",
         "Exit"
     )
 
@@ -249,6 +161,10 @@ function Run-CLI {
                         Install-WizTree
                     }
                     14 {
+                        Write-Host "`nInstalling WSL..."
+                        Install-WSL
+                    }
+                    15 {
                         Write-Host "`nExiting..."
                         exit
                     }
