@@ -1,11 +1,4 @@
-# Function to install Windows Subsystem for Linux (WSL)
-function Install-WSL {
-    Write-Host "`nInstalling Windows Subsystem for Linux (WSL)..."
-    Run-AdminCommand -command "wsl --install"
-    Start-Sleep -Seconds 5
-}
-
-# Function to show menu
+# Function to show menu with a cool title
 function Show-Menu {
     param (
         [int]$SelectedIndex
@@ -14,10 +7,15 @@ function Show-Menu {
     # Clear the screen and print the menu
     Clear-Host
 
-    # Ensure the header is visible
-    Write-Host "===========================================" -ForegroundColor Magenta
-    Write-Host "===== Command-Line Utilities by Sarim =====" -ForegroundColor Magenta
-    Write-Host "===========================================" -ForegroundColor Magenta
+    Write-Host @"
+  ____ _     ___   _   _ _   _ _
+ / ___| |   |_ _| | | | | |_(_) |___
+| |   | |    | |  | | | | __| | / __|
+| |___| |___ | |  | |_| | |_| | \__ \
+ \____|_____|___|  \___/ \__|_|_|___/        
+
+"@ -ForegroundColor Magenta
+    Write-Host "      Command Line Utilities, made by Sarim Sharif`n" -ForegroundColor Cyan
 
     $menuItems = @(
         "Say Hello",
@@ -52,7 +50,7 @@ function Show-Menu {
     }
 }
 
-# Function to run CLI
+# Function to handle key input and loop menu interaction
 function Run-CLI {
     $selectedIndex = 0
     $menuItems = @(
