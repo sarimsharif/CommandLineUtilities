@@ -1,3 +1,71 @@
+# Function to check if the script is running as administrator
+function Test-IsAdministrator {
+    $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object System.Security.Principal.WindowsPrincipal($currentIdentity)
+    return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# Function to run commands with elevated privileges (if needed) in cmd
+function Run-AdminCommand {
+    param (
+        [string]$command
+    )
+
+    if (-not (Test-IsAdministrator)) {
+        # If not running as admin, prompt for elevation
+        $arguments = "/c $command"
+        Start-Process cmd -ArgumentList "/c start /min cmd.exe /c $command" -Verb RunAs
+        return
+    }
+
+    # Start the elevated command in an invisible window
+    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c $command" `
+                              -WindowStyle Hidden -PassThru `
+                              -RedirectStandardOutput "output.txt" `
+                              -RedirectStandardError "error.txt"
+
+    # Wait for process to complete
+    $process.WaitForExit()
+
+    # Display output and errors in the main window
+    if (Test-Path "output.txt") {
+        $output = Get-Content "output.txt" -Raw
+        Write-Host "`n$output"
+    }
+
+    if (Test-Path "error.txt") {
+        $error = Get-Content "error.txt" -Raw
+        Write-Host "`n$error" -ForegroundColor Red
+    }
+
+    # Clean up the output files
+    Remove-Item "output.txt", "error.txt" -Force
+}
+
+# Function to run System File Checker with elevation
+function Run-SystemFileChecker {
+    Write-Host "`nRunning System File Checker (sfc /scannow)..."
+    Run-AdminCommand -command "sfc /scannow"
+    Start-Sleep -Seconds 5
+}
+
+# Function to get the saved product key from registry (BackupProductKeyDefault)
+function Get-BackupProductKeyFromRegistry {
+    try {
+        # Correct registry path for BackupProductKeyDefault
+        $Path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform"
+        $key = (Get-ItemProperty -Path $Path).BackupProductKeyDefault
+        if ($key) {
+            return $key
+        }
+        else {
+            Write-Host "`nNo backup product key found in registry." -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "`nError retrieving backup product key." -ForegroundColor Red
+    }
+}
+
 function Show-Menu {
     param (
         [int]$SelectedIndex
@@ -22,14 +90,13 @@ function Show-Menu {
         "Free KMS Activate",
         "Reactivate with Saved Key",
         "Get Product Key",
+        "Run System File Checker (sfc /scannow)",
         "Exit"
     )
 
     # Colors
-    $highlightColor = "Cyan"  # Changed to Cyan since LightBlue is invalid
+    $highlightColor = "Cyan"
     $normalColor = "White"
-
-
 
     for ($i = 0; $i -lt $menuItems.Length; $i++) {
         if ($i -eq $SelectedIndex) {
@@ -39,77 +106,6 @@ function Show-Menu {
             Write-Host "   $($menuItems[$i])" -ForegroundColor $normalColor
         }
     }
-}   
-
-function Get-ProductKeyFromRegistry {
-    # Registry path for the product key
-    $path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform"
-    
-    try {
-        # Get the BackupProductKeyDefault value from the registry
-        $productKey = (Get-ItemProperty -Path $path).BackupProductKeyDefault
-        if ($productKey) {
-            return $productKey # Return the product key
-        } else {
-            return $null # If no product key is found, return null
-        }
-    }
-    catch {
-        Write-Host "Error retrieving product key from registry: $_"
-        return $null # If there's an error, return null
-    }
-}
-
-# Call this function when you need to get the product key
-$productKey = Get-ProductKeyFromRegistry
-
-if ($productKey) {
-    Write-Host "`nProduct Key successfully retrieved: $productKey"
-} else {
-    Write-Host "`nFailed to retrieve product key."
-}
-
-function Convert-From-DigitalProductId {
-    param (
-        [byte[]]$digitalProductId
-    )
-    
-    # Check if DigitalProductId has enough data
-    if ($digitalProductId.Length -lt 52) {
-        Write-Host "DigitalProductId is too short to extract a product key."
-        return $null
-    }
-
-    $keyStart = 52
-    $keyLength = 15
-    $productKeyChars = "BCDFGHJKMPQRTVWXY2346789"
-    $productKey = ""
-
-    try {
-        for ($i = $keyStart; $i -lt $keyStart + $keyLength; $i++) {
-            $currentByte = $digitalProductId[$i]
-            $productKey = $productKey + $productKeyChars[$currentByte % 24]
-        }
-
-        # Format the product key as XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
-        $formattedKey = $productKey.Substring(0, 5) + "-" + $productKey.Substring(5, 5) + "-" + $productKey.Substring(10, 5) + "-" + $productKey.Substring(15, 5) + "-" + $productKey.Substring(20, 5)
-        return $formattedKey
-    } catch {
-        Write-Host "Error while converting DigitalProductId: $_"
-        return $null
-    }
-}
-
-# Function to run commands with admin privileges
-function Run-AdminCommand {
-    param (
-        [string]$command
-    )
-
-    $arguments = @("powershell", "-Command", "$command")
-
-    # Start the command as administrator
-    Start-Process -FilePath "powershell.exe" -ArgumentList $arguments -Verb RunAs
 }
 
 function Run-CLI {
@@ -125,6 +121,7 @@ function Run-CLI {
         "Free KMS Activate",
         "Reactivate with Saved Key",
         "Get Product Key",
+        "Run System File Checker (sfc /scannow)",
         "Exit"
     )
 
@@ -175,7 +172,7 @@ function Run-CLI {
                     }
                     8 {
                         Write-Host "`nReactivating with saved product key..."
-                        $savedKey = Get-ProductKeyFromRegistry
+                        $savedKey = Get-BackupProductKeyFromRegistry
                         if ($savedKey) {
                             Run-AdminCommand -command "slmgr /ipk $savedKey; slmgr /ato"
                         } else {
@@ -191,7 +188,7 @@ function Run-CLI {
                     }
                     9 {
                         Write-Host "`nYour Windows Product Key is: "
-                        $productKey = Get-ProductKeyFromRegistry
+                        $productKey = Get-BackupProductKeyFromRegistry
                         if ($productKey) {
                             Write-Host $productKey
                         } else {
@@ -199,7 +196,11 @@ function Run-CLI {
                         }
                         Start-Sleep -Seconds 5
                     }
-                    10 { 
+                    10 {
+                        Write-Host "`nRunning System File Checker..."
+                        Run-SystemFileChecker
+                    }
+                    11 { 
                         Write-Host "`nExiting script..." 
                         return # This will exit the script
                     }
